@@ -1,6 +1,0 @@
-Flask
-cohere
-fpdf
-pandas
-openpyxl
-python-dotenv
