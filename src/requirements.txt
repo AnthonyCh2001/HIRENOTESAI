@@ -3,11 +3,6 @@ cohere
 fpdf
 pandas
 openpyxl
-<<<<<<< HEAD
 datetime
 matplotlib
 python-dotenv
-=======
-python-dotenv
-matplotlib
->>>>>>> 8b051865e14d7c898301418a4f96d66e69e3da2c
