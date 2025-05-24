@@ -24,9 +24,9 @@ app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = 'src/uploads'
-PDF_FOLDER = 'src/pdfs'
-CHART_FOLDER = 'src/charts'
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+PDF_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs')
+CHART_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'charts')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PDF_FOLDER, exist_ok=True)
 os.makedirs(CHART_FOLDER, exist_ok=True)
@@ -132,7 +132,7 @@ def descargar_sheet_como_excel(sheet_url):
         if response.status_code == 200:
             # Generar nombre único
             unique_name = f"google_sheets_{uuid.uuid4().hex}.xlsx"
-            ruta_destino = os.path.join('src','uploads', unique_name)
+            ruta_destino = os.path.join('uploads', unique_name)
             with open(ruta_destino, 'wb') as f:
                 f.write(response.content)
             return ruta_destino
@@ -399,7 +399,7 @@ def crear_grafico_radar_comparativo(datos_candidatos, nombre_archivo):
 
 def generar_pdf_comparativo(nombre_archivo, seleccionados):
     mapa_nombres = cargar_mapa_pdfs()
-    ruta_uploads = os.path.join('src','uploads')
+    ruta_uploads = os.path.join('uploads')
     archivos_excel = [f for f in os.listdir(ruta_uploads) if f.endswith('.xlsx')]
 
     filas_candidatos = []
@@ -526,7 +526,7 @@ def generar_pdf_comparativo(nombre_archivo, seleccionados):
                     pdf.multi_cell(0, 8, parrafo.strip())
                     pdf.ln(1)
 
-    ruta_salida = os.path.join( 'src','pdfs', nombre_archivo)
+    ruta_salida = os.path.join( 'pdfs', nombre_archivo)
     pdf.output(ruta_salida)
     return ruta_salida
 
