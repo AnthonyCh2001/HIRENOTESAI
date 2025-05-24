@@ -40,6 +40,15 @@
             text-decoration: none;
         }
 
+        .btn-container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto 0 auto;
+            /* margen arriba, y centrado horizontal */
+            text-align: center;
+            /* centra los botones */
+        }
+
         .btn-descargar {
             background-color: #2ecc71;
             color: white;
@@ -50,8 +59,8 @@
             color: white;
         }
 
-        .btn-eliminar {
-            background-color: #e74c3c;
+        .btn-editar {
+            background-color: #f8e44b;
             color: white;
         }
 
@@ -60,16 +69,55 @@
             color: white;
         }
 
-        .btn:hover {
+        .btn-generar {
+            background-color: #2980b9;
+            color: white;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            margin: 2px 0;
+        }
+
+        .btn-generar:hover {
             opacity: 0.85;
         }
 
+        .btn-eliminar-multiple {
+            background-color: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            margin: 0px 0;
+        }
+
+        .btn-eliminar-multiple:hover {
+            opacity: 0.85;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+            align-items: center;
+        }
+
         table {
-            width: 90%;
+            width: 800px;
             max-width: 800px;
             border-collapse: collapse;
             background-color: #ffffff;
             box-shadow: 0 0 12px rgba(0, 0, 0, 0.05);
+            table-layout: auto;
         }
 
         th,
@@ -103,6 +151,45 @@
             width: 100%;
         }
 
+        /* Centrar todas las celdas y encabezados excepto la columna 3 */
+        th:not(:nth-child(3)),
+        td:not(:nth-child(3)) {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* La columna 3 queda con alineación por defecto (izquierda) */
+        th:nth-child(3),
+        td:nth-child(3) {
+            text-align: left;
+        }
+
+        td:nth-child(2) input[type="checkbox"] {
+            transform: scale(1.2);
+            /* Tamaño más visible */
+            cursor: pointer;
+        }
+
+        .search-row td {
+            padding: 10px 16px;
+            background-color: #ecf6fc;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .search-input {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .tabla-contenedor {
+            width: 800px;
+            max-width: 800px;
+            min-width: 800px;
+        }
+
+
         /* Modal */
         .modal {
             display: none;
@@ -118,7 +205,7 @@
         .modal-content {
             position: relative;
             margin: 5% auto;
-            width: 90%;
+            width: 100%;
             max-width: 800px;
             background: white;
             padding: 20px;
@@ -139,12 +226,14 @@
     </style>
 </head>
 
+
 <body>
 
     <div class="header">
         <a href="/" class="btn btn-volver">← Volver al inicio</a>
         <h1>PDFs Generados</h1>
     </div>
+
 
     {% with messages = get_flashed_messages() %}
     {% if messages %}
@@ -156,48 +245,70 @@
     {% endif %}
     {% endwith %}
 
-    <table id="tablaPDFs">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Nombre del archivo</th>
-                <th>Vista previa</th>
-                <th>Editar</th>
-                <th>Descargar</th>
-                <th>Eliminar</th>
-            </tr>
-            <tr class="search-row">
-                <td colspan="6">
-                    <input type="text" id="buscador" class="search-input" placeholder="Buscar por nombre de PDF...">
-                </td>
-            </tr>
-        </thead>
-        <tbody>
-            {% for archivo in archivos %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ archivo }}</td>
-                <td>
-                    <button class="btn btn-vista"
-                        onclick="mostrarModal('{{ url_for('ver_pdf', nombre=archivo) }}')">Ver</button>
-                </td>
-                <td>
-                    <button class="btn btn-vista" onclick="abrirEditor('{{ archivo }}')">Editar</button>
-                </td>
-                <td>
-                    <a class="btn btn-descargar" href="{{ url_for('ver_pdf', nombre=archivo) }}"
-                        download>Descargar</a>
-                </td>
-                <td>
-                    <form action="{{ url_for('eliminar', nombre=archivo) }}" method="post"
-                        onsubmit="return confirm('¿Eliminar {{ archivo }}?')">
-                        <button type="submit" class="btn btn-eliminar">Eliminar</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+
+
+    <form id="comparativoForm" action="{{ url_for('comparar_candidatos') }}" method="post"
+        onsubmit="return validarSeleccion()">
+        <div class="tabla-contenedor">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Seleccionar</th>
+                        <th>Nombre del archivo</th>
+                        <th>Vista previa</th>
+                        <th>Editar</th>
+                        <th>Descargar</th>
+                    </tr>
+                    <tr class="search-row">
+                        <td colspan="6">
+                            <input type="text" id="buscador" class="search-input"
+                                placeholder="Buscar por nombre de PDF...">
+                        </td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for archivo in archivos %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <input type="checkbox" name="seleccionados" value="{{ archivo }}">
+                        </td>
+                        <td>{{ archivo }}</td>
+                        <td>
+                            <button type="button" class="btn btn-vista"
+                                onclick="mostrarModal('{{ url_for('ver_pdf', nombre=archivo) }}')">Ver</button>
+
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-editar"
+                                onclick="abrirEditor('{{ archivo }}')">Editar</button>
+                        </td>
+                        <td>
+                            <a class="btn btn-descargar" href="{{ url_for('descargar_pdf', nombre=archivo) }}"
+                                download>Descargar</a>
+
+
+                        </td>
+
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="text-align:center; margin-top: 20px;">
+            <button type="submit" class="btn-generar" name="accion" value="generar">Generar Informe Comparativo</button>
+        </div>
+    </form>
+
+    <form id="eliminarForm" action="{{ url_for('eliminar_multiples') }}" method="post"
+        onsubmit="return confirmarEliminacion()">
+        <input type="hidden" name="seleccionados" id="checkboxesEliminar">
+        <div style="text-align:center; margin-top: 20px;">
+            <button type="submit" class="btn-eliminar-multiple">Eliminar Seleccionados</button>
+        </div>
+    </form>
+
 
     <!-- Modal -->
     <div id="modalPDF" class="modal">
@@ -208,6 +319,26 @@
     </div>
 
     <script>
+        // Copiar los checkboxes seleccionados del primer formulario al hidden input del segundo
+        function confirmarEliminacion() {
+            const checkboxes = document.querySelectorAll('#comparativoForm input[name="seleccionados"]:checked');
+            if (checkboxes.length === 0) {
+                alert('Debe seleccionar al menos un archivo para eliminar.');
+                return false;
+            }
+            const valores = Array.from(checkboxes).map(cb => cb.value);
+            document.getElementById('checkboxesEliminar').value = valores.join(',');
+            return confirm('¿Eliminar archivos seleccionados?');
+        }
+
+        function validarSeleccion() {
+            const checkboxes = document.querySelectorAll('input[name="seleccionados"]:checked');
+            if (checkboxes.length < 3 || checkboxes.length > 6) {
+                alert("Debe seleccionar entre 3 y 6 candidatos para generar el informe comparativo.");
+                return false;
+            }
+            return true;
+        }
         function mostrarModal(ruta) {
             document.getElementById("visorPDF").src = ruta;
             document.getElementById("modalPDF").style.display = "block";
@@ -228,10 +359,10 @@
         // Filtro en tiempo real
         document.getElementById('buscador').addEventListener('keyup', function () {
             const filtro = this.value.toLowerCase();
-            const filas = document.querySelectorAll("#tablaPDFs tbody tr");
+            const filas = document.querySelectorAll("table tbody tr");
 
             filas.forEach(fila => {
-                const nombreArchivo = fila.cells[1].textContent.toLowerCase();
+                const nombreArchivo = fila.cells[2].textContent.toLowerCase();
                 if (nombreArchivo.includes(filtro)) {
                     fila.style.display = "";
                 } else {

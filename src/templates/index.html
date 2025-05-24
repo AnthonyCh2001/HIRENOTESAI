@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <title>Generador de Reportes Automáticos</title>
@@ -15,6 +16,7 @@
       justify-content: center;
       padding: 2rem;
     }
+
     .contenedor {
       max-width: 600px;
       width: 100%;
@@ -24,14 +26,17 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       text-align: center;
     }
+
     .progress {
       height: 25px;
       width: 50%;
       margin: 0 auto;
     }
+
     .progress-bar {
       transition: width 0.5s ease;
     }
+
     .boton-reportes {
       max-width: 600px;
       width: 100%;
@@ -49,10 +54,30 @@
 
   <div class="contenedor">
     <form id="formulario" action="/procesar" method="post" enctype="multipart/form-data">
-      <div class="mb-3 text-start">
-        <label for="archivo" class="form-label">Seleccionar archivo Excel:</label>
-        <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx" required>
+
+      <!-- Switch para cambiar entre modos -->
+      <div class="mb-4 d-flex justify-content-center align-items-center gap-3">
+        <span class="fw-semibold">Subir archivo</span>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="toggleModo">
+        </div>
+        <span class="fw-semibold">Usar Google Sheets</span>
       </div>
+
+      <!-- Campo para archivo Excel -->
+      <div class="mb-3 text-start" id="campo-excel">
+        <label for="archivo" class="form-label">Seleccionar archivo Excel (.xlsx):</label>
+        <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx">
+      </div>
+
+      <!-- Campo para link de Google Sheets -->
+      <div class="mb-3 text-start d-none" id="campo-sheets">
+        <label for="sheet_url" class="form-label">Enlace de Google Sheets:</label>
+        <input class="form-control" type="url" id="sheet_url" name="sheet_url"
+          placeholder="https://docs.google.com/spreadsheets/d/..." pattern="https://.*">
+        <small class="form-text text-muted">Debe estar compartido públicamente o con enlace de visualización.</small>
+      </div>
+
       <button type="submit" class="btn btn-primary w-100">Generar Reportes</button>
     </form>
 
@@ -70,24 +95,50 @@
 
   <script>
     $(document).ready(function () {
+      // Alternar campos con el switch
+      $('#toggleModo').on('change', function () {
+        if ($(this).is(':checked')) {
+          $('#campo-excel').addClass('d-none');
+          $('#campo-sheets').removeClass('d-none');
+          $('#archivo').prop('required', false);
+          $('#sheet_url').prop('required', true);
+        } else {
+          $('#campo-excel').removeClass('d-none');
+          $('#campo-sheets').addClass('d-none');
+          $('#archivo').prop('required', true);
+          $('#sheet_url').prop('required', false);
+        }
+      });
+
+      // Progreso (como antes)
       $('#formulario').on('submit', function () {
         $('#progreso-container').show();
         $('#barra-progreso').css('width', '0%').text('0%');
         actualizarProgreso();
       });
 
-      function actualizarProgreso() {
-        $.getJSON('/progreso', function (data) {
-          let porcentaje = data.porcentaje;
-          $('#barra-progreso').css('width', porcentaje + '%').text(porcentaje + '%');
-
-          if (porcentaje < 100) {
-            setTimeout(actualizarProgreso, 800); // puede bajar a 500ms si quieres más frecuencia
-          }
+      $(document).ready(function () {
+        $('#formulario').on('submit', function () {
+          $('#progreso-container').show();
+          $('#barra-progreso').css('width', '0%').text('0%');
+          actualizarProgreso();
         });
-      }
+
+        function actualizarProgreso() {
+          $.getJSON('/progreso', function (data) {
+            let porcentaje = data.porcentaje;
+            $('#barra-progreso').css('width', porcentaje + '%').text(porcentaje + '%');
+
+            if (porcentaje < 100) {
+              setTimeout(actualizarProgreso, 800); // puede bajar a 500ms si quieres más frecuencia
+            }
+          });
+        }
+      });
     });
   </script>
 
+
 </body>
+
 </html>
