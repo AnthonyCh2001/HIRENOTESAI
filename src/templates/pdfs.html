@@ -179,13 +179,13 @@
                 <td>{{ archivo }}</td>
                 <td>
                     <button class="btn btn-vista"
-                        onclick="mostrarModal('{{ url_for('static', filename='pdfs/' + archivo) }}')">Ver</button>
+                        onclick="mostrarModal('{{ url_for('ver_pdf', nombre=archivo) }}')">Ver</button>
                 </td>
                 <td>
                     <button class="btn btn-vista" onclick="abrirEditor('{{ archivo }}')">Editar</button>
                 </td>
                 <td>
-                    <a class="btn btn-descargar" href="{{ url_for('static', filename='pdfs/' + archivo) }}"
+                    <a class="btn btn-descargar" href="{{ url_for('ver_pdf', nombre=archivo) }}"
                         download>Descargar</a>
                 </td>
                 <td>

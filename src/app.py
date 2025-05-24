@@ -3,36 +3,53 @@ import time
 import pandas as pd
 import cohere
 import concurrent.futures
+import unicodedata
 import re
-from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash, jsonify
+from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash
 from fpdf import FPDF
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+from datetime import datetime
+import matplotlib
+matplotlib.use('Agg')  # Reemplaza el backend de matplotlib
+import matplotlib.pyplot as plt
 
-# Configurar Flask
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
+
 UPLOAD_FOLDER = 'src/uploads'
-PDF_FOLDER = 'src/static/pdfs'
+PDF_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs')
+os.makedirs(PDF_FOLDER, exist_ok=True)
+CHART_FOLDER = 'src/static/charts'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PDF_FOLDER, exist_ok=True)
+os.makedirs(CHART_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 load_dotenv()
 
-# Conectar con Cohere
 api_key = os.getenv("CO_API_KEY")
 co = cohere.Client(api_key)
 
-# Estado de progreso global
-progreso = {
-    "total": 0,
-    "procesados": 0
+# Escala softskills
+ESCALA_INTERPERSONAL = {
+    "muy baja": 1,
+    "baja": 2,
+    "media": 3,
+    "alta": 4,
+    "muy alta": 5
 }
 
+
+# Alias de columnas
 ALIAS_COLUMNAS = {
     "nombre": "Nombre Completo",
     "edad": "Edad",
     "correo": "Correo Electrónico",
+    "estado civil": "Estado civil",
+    "telefono": "Teléfono",
+    "evaluador": "Evaluador",
+    "grado de instruccion": "Grado de Instruccion",
+    "fecha de evaluacion": "Fecha de evaluación",
     "carrera": "Carrera",
     "puesto": "Puesto Postulado",
     "nivel": "Nivel de Compatibilidad",
@@ -57,73 +74,183 @@ def mapear_columna(col):
             return valor
     return col
 
-def construir_prompt(datos):
-    prompt = "Eres un reclutador senior. Redacta una evaluación clara, profesional y natural en español para informes de selección. Analiza todas las competencias del candidato proporcionadas, agrupadas y por separado: técnicas, interpersonales y cualquier otra. Destaca fortalezas, áreas de mejora y relación de estas con el puesto. Cierra con una recomendación argumentada sobre su continuidad en el proceso. Evita repetir datos textuales, sonar genérico o redundante. Que la variable de evaluacion del reclutador sea de 3800 a 4000 palabras."
 
+
+
+def construir_prompt(datos, nombre_candidato):
+    prompt = (
+        f"Eres un reclutador senior. Redacta una evaluación clara, profesional y natural en español para el candidato {nombre_candidato}. "
+        f"El informe debe iniciar con el subtítulo **Evaluación de {nombre_candidato}** y luego cubrir: resumen general, fortalezas, competencias técnicas, competencias interpersonales, experiencia relevante, oportunidades de mejora y una recomendación. "
+        "No repitas información que ya esté en la sección de datos personales. No escribas encabezados como 'Evaluación de Selección' salvo el subtítulo mencionado. "
+        "Organiza el contenido usando subtítulos marcados con **, por ejemplo: **Fortalezas**. "
+        "Evita listas con guiones. El texto debe ser fluido, coherente, y no debe parecer una lista. "
+        "Máximo 500 palabras por secciones. Todo debe parecer redactado por un humano con criterio profesional."
+    )
     for k, v in datos.items():
-        prompt += f"{k}: {v}\n"
-    prompt += "\nEl texto debe parecer escrito por un humano con criterio. No más de 300 palabras."
+        prompt += f"\n{k}: {v}"
     return prompt
+
+
+
+
 
 def crear_pdf(nombre_archivo, datos_resumen, informe_texto):
     pdf = FPDF()
+    pdf.set_left_margin(25)
+    pdf.set_right_margin(25)
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Informe de Evaluación del Candidato", ln=True, align="C")
-    pdf.ln(10)
 
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Datos Personales:", ln=True)
-    pdf.ln(4)
-    pdf.set_font("Arial", "", 11)
-    for campo in ["Nombre Completo", "Edad", "Correo Electrónico", "Carrera", "Puesto Postulado"]:
-        if campo in datos_resumen:
-            pdf.set_font("Arial", "B", 11)
-            pdf.cell(60, 8, f"{campo}", border=1)
-            pdf.set_font("Arial", "", 11)
-            pdf.cell(120, 8, str(datos_resumen[campo]), border=1, ln=True)
+    pdf.set_font("Times", "B", 16)
+    pdf.cell(0, 10, "INFORME DE EVALUACIÓN DEL CANDIDATO", ln=True, align="C")
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Conocimientos Técnicos:", ln=True)
-    pdf.ln(4)
-    pdf.set_font("Arial", "", 11)
-    for campo in ["Nivel de Compatibilidad", "Experiencia (años)", "Áreas de Experiencia",
-                  "PLC y Redes Industriales", "Inglés", "Gestión de Proyectos"]:
-        if campo in datos_resumen:
-            pdf.set_font("Arial", "B", 11)
-            pdf.cell(60, 8, f"{campo}", border=1)
-            pdf.set_font("Arial", "", 11)
-            pdf.cell(120, 8, str(datos_resumen[campo]), border=1, ln=True)
+    pdf.set_font("Times", "B", 12)
+    pdf.cell(0, 10, "DATOS PERSONALES", ln=True)
+
+    campos_orden = [
+        "Nombre Completo", "Edad", "Estado civil", "Teléfono",
+        "Evaluador", "Grado de Instruccion", "Carrera", "Puesto Postulado",
+        "Fecha de evaluación", "Correo Electrónico"
+    ]
+
+    etiqueta_width = 60
+    separador_width = 5
+    valor_width = 0
+
+    for campo in campos_orden:
+        posibles_keys = [k for k in datos_resumen if campo.lower().strip() in k.lower().strip()]
+        if posibles_keys:
+            key = posibles_keys[0]
+            valor_raw = datos_resumen[key]
+            if pd.isna(valor_raw):
+                valor = ""
+            elif isinstance(valor_raw, float):
+                valor = str(int(valor_raw))
+            elif isinstance(valor_raw, datetime):
+                valor = valor_raw.strftime("%d/%m/%Y")
+            else:
+                valor = str(valor_raw).strip()
+
+            pdf.set_font("Times", "B", 11)
+            pdf.cell(etiqueta_width, 8, campo.upper(), ln=False)
+            pdf.cell(separador_width, 8, ":", ln=False)
+            pdf.set_font("Times", "", 11)
+            pdf.cell(valor_width, 8, valor, ln=True)
+
     pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Habilidades Blandas:", ln=True)
-    pdf.ln(4)
-    pdf.set_font("Arial", "", 11)
-    for campo in ["Trabajo Interdisciplinario", "Proactividad y Adaptación", "Comunicación",
-                  "Trabajo en Equipo", "Liderazgo", "Resiliencia"]:
-        if campo in datos_resumen:
-            pdf.set_font("Arial", "B", 11)
-            pdf.cell(60, 8, f"{campo}", border=1)
-            pdf.set_font("Arial", "", 11)
-            pdf.cell(120, 8, str(datos_resumen[campo]), border=1, ln=True)
+    secciones = re.split(r'(\*\*[^*]+\*\*)', informe_texto)
+    for i, seccion in enumerate(secciones):
+        if seccion.startswith("**") and seccion.endswith("**"):
+            titulo = seccion.strip("*.").strip().upper()
+            pdf.set_font("Times", "B", 12)
+            pdf.cell(0, 8, titulo, ln=True)
+            pdf.ln(2)
 
-    if "Comentarios Generales" in datos_resumen:
-        pdf.ln(10)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Comentarios Generales:", ln=True)
-        pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 8, str(datos_resumen["Comentarios Generales"]))
+            # Revisión flexible de subtítulo interpersonal
+            if any(palabra in titulo.lower() for palabra in ["interpersonales", "habilidades blandas", "soft skills"]):
+                nombre_base = limpiar_nombre(nombre_archivo.replace('.pdf', ''))
+                nombre_img = f"{nombre_base}_interpersonal.png"
+                ruta_img = generar_grafico_interpersonal(datos_resumen, nombre_img)
+                if ruta_img and os.path.exists(ruta_img):
+                    pdf.image(ruta_img, x=30, w=150)
+                    pdf.ln(5)
 
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Evaluación del Reclutador:", ln=True)
-    pdf.ln(2)
-    pdf.set_font("Arial", "", 11)
-    pdf.multi_cell(0, 8, informe_texto)
+        else:
+            pdf.set_font("Times", "", 11)
+            parrafos = seccion.strip().split('\n')
+            for parrafo in parrafos:
+                if parrafo.strip():
+                    pdf.multi_cell(0, 8, parrafo.strip())
+                    pdf.ln(1)
 
     pdf.output(os.path.join(PDF_FOLDER, nombre_archivo))
+
+
+def normalizar(texto):
+    if not isinstance(texto, str):
+        texto = str(texto)
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
+    return texto
+
+def generar_grafico_interpersonal(datos, nombre_archivo):
+    habilidades = []
+    valores = []
+
+    datos_normalizados = {normalizar(k): normalizar(v) for k, v in datos.items()}
+
+    for campo in [
+        "Trabajo en Equipo", "Comunicación", "Liderazgo",
+        "Resiliencia", "Proactividad y Adaptación"
+    ]:
+        clave_norm = normalizar(campo)
+        if clave_norm in datos_normalizados:
+            valor_norm = datos_normalizados[clave_norm]
+            if valor_norm in ESCALA_INTERPERSONAL:
+                habilidades.append(campo)  # conservar el original con mayúsculas para el gráfico
+                valores.append(ESCALA_INTERPERSONAL[valor_norm])
+
+    if habilidades:
+        plt.figure(figsize=(6, 3.5))
+        bars = plt.barh(habilidades, valores, color='#4A90E2', height=0.4)
+        plt.title("Habilidades Blandas", fontsize=12)
+        plt.xlim(0, 5.5)
+        plt.xticks([1, 2, 3, 4, 5])
+        plt.yticks(fontsize=9)
+        plt.xlabel("Nivel", fontsize=10)
+        plt.grid(axis='x', linestyle='--', alpha=0.6)
+
+        for bar in bars:
+            width = bar.get_width()
+            plt.text(width + 0.1, bar.get_y() + bar.get_height() / 2, f'{int(width)}', va='center', fontsize=9)
+
+        plt.tight_layout()
+        ruta_imagen = os.path.join(CHART_FOLDER, nombre_archivo)
+        plt.savefig(ruta_imagen)
+        plt.close()
+        return ruta_imagen
+    return None
+
+def generar_informe_y_pdf(index, fila, reintentos=3, espera_base=2):
+    try:
+        datos_candidato = {
+            mapear_columna(col): fila[col]
+            for col in fila.index
+            if pd.notna(fila[col]) and str(fila[col]).strip() != ""
+        }
+
+        columna_nombre = next((col for col in fila.index if "nombre" in col.lower()), None)
+        nombre_candidato = str(fila[columna_nombre]) if columna_nombre and pd.notna(fila[columna_nombre]) else f"candidato_{index+1}"
+        nombre_archivo_pdf = limpiar_nombre(nombre_candidato) + ".pdf"
+        ruta_pdf = os.path.join(PDF_FOLDER, nombre_archivo_pdf)
+
+        if os.path.exists(ruta_pdf):
+            print(f"{nombre_archivo_pdf} ya existe, será actualizado.")
+            os.remove(ruta_pdf)
+
+        print(f"Procesando candidato {index + 1}: {nombre_candidato}")
+
+        datos_prompt = {k: v for k, v in datos_candidato.items() if k not in [
+            "Nombre Completo", "Edad", "Estado civil", "Teléfono", "Evaluador", "Grado de Instruccion",
+            "Carrera", "Puesto Postulado", "Fecha de evaluación", "Correo Electrónico"]}
+
+        prompt = construir_prompt(datos_prompt, nombre_candidato)
+        response = co.generate(
+            model="command-r-plus",
+            prompt=prompt,
+            max_tokens=800,
+            temperature=0.4
+        )
+        informe = response.generations[0].text.strip()
+
+        crear_pdf(nombre_archivo_pdf, datos_candidato, informe)
+        print(f"PDF creado: {nombre_archivo_pdf}")
+        return True
+
+    except Exception as e:
+        print(f"[Error] Índice {index}: {e}")
+        return False
 
 def extraer_numero(nombre):
     match = re.search(r'(\d+)', nombre)
@@ -131,59 +258,6 @@ def extraer_numero(nombre):
 
 def limpiar_nombre(nombre):
     return re.sub(r'[^\w\s-]', '', nombre).strip().replace(' ', '_')
-
-def generar_informe_y_pdf(index, fila, reintentos=3, espera_base=2):
-    for intento in range(reintentos):
-        try:
-            datos_candidato = {
-                mapear_columna(col): fila[col]
-                for col in fila.index
-                if pd.notna(fila[col]) and str(fila[col]).strip() != ""
-            }
-
-            columna_nombre = next((col for col in fila.index if "nombre" in col.lower()), None)
-            nombre_candidato = str(fila[columna_nombre]) if columna_nombre and pd.notna(fila[columna_nombre]) else f"candidato_{index+1}"
-            nombre_archivo_pdf = limpiar_nombre(nombre_candidato) + ".pdf"
-            ruta_pdf = os.path.join(PDF_FOLDER, nombre_archivo_pdf)
-
-            # Log cuando se solicita generar informe
-            print(f"[INFO] Solicitando generación de informe para: {nombre_candidato}")
-
-            if os.path.exists(ruta_pdf):
-                os.remove(ruta_pdf)
-
-            prompt = construir_prompt(datos_candidato)
-
-            respuesta = co.generate(
-                model="command-r-plus",
-                prompt=prompt,
-                max_tokens=700,
-                temperature=0.4,
-            )
-
-            informe = respuesta.generations[0].text.strip()
-            if not informe.endswith("."):
-                informe += "."
-
-            crear_pdf(nombre_archivo_pdf, datos_candidato, informe)
-
-            progreso["procesados"] += 1
-
-            # Log cuando se genera exitosamente
-            print(f"[OK] Informe generado: {nombre_archivo_pdf}")
-
-            return True
-
-        except Exception as e:
-            if hasattr(e, 'status_code') and e.status_code == 429:
-                espera = espera_base * (2 ** intento)
-                print(f"[WARN] Límite de tasa alcanzado. Reintentando en {espera}s (Intento {intento+1}/{reintentos})...")
-                time.sleep(espera)
-            else:
-                # Log cuando hay error general
-                print(f"[ERROR] Error al generar informe para {nombre_candidato}: {e}")
-                return False
-    return False
 
 
 @app.route('/')
@@ -200,50 +274,31 @@ def procesar():
     ruta_guardado = os.path.join(app.config['UPLOAD_FOLDER'], nombre_archivo)
     archivo.save(ruta_guardado)
 
-    print(f"[INFO] Archivo recibido: {nombre_archivo}")
-
     df = pd.read_excel(ruta_guardado)
-
-    progreso["total"] = len(df)
-    progreso["procesados"] = 0
+    print(f"Total filas en Excel: {len(df)}")
 
     fallidos = []
 
-    def procesar_fila(idx, fila):
-        resultado = generar_informe_y_pdf(idx, fila)
-        return idx, resultado
-
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(procesar_fila, idx, fila): idx for idx, fila in df.iterrows()}
-
-        for future in concurrent.futures.as_completed(futures):
-            idx, resultado = future.result()
-            if not resultado:
+        future_to_index = {executor.submit(generar_informe_y_pdf, idx, fila): idx for idx, fila in df.iterrows()}
+        for future in concurrent.futures.as_completed(future_to_index):
+            idx = future_to_index[future]
+            try:
+                if not future.result():
+                    fallidos.append((idx, df.iloc[idx]))
+            except Exception as e:
+                print(f"[Error] Índice {idx} al procesar en paralelo: {e}")
                 fallidos.append((idx, df.iloc[idx]))
 
     if fallidos:
-        print(f"[WARN] Se reintentarán {len(fallidos)} informes fallidos.")
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as retry_executor:
+        print(f"Reintentando {len(fallidos)} candidatos fallidos en paralelo...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as retry_executor:
             retry_futures = [
                 retry_executor.submit(generar_informe_y_pdf, idx, fila) for idx, fila in fallidos
             ]
             concurrent.futures.wait(retry_futures)
 
-    print("[INFO] Proceso de generación de informes finalizado.")
-
-    progreso["procesados"] = progreso["total"]  # asegúrate de que quede en 100% al terminar
     return redirect(url_for('listar_pdfs'))
-
-@app.route('/progreso')
-def obtener_progreso():
-    if progreso["total"] == 0:
-        porcentaje = 0
-    else:
-        porcentaje = int(progreso["procesados"] * 100 / progreso["total"])
-        if porcentaje > 100:
-            porcentaje = 100
-    return jsonify({"porcentaje": porcentaje})
 
 @app.route('/pdfs')
 def listar_pdfs():
@@ -261,6 +316,14 @@ def eliminar(nombre):
     else:
         flash(f"No se encontró el archivo {nombre}.")
     return redirect(url_for('listar_pdfs'))
+
+@app.route('/descargar/<nombre>')
+def descargar(nombre):
+    return send_from_directory(PDF_FOLDER, nombre, as_attachment=True)
+
+@app.route('/ver_pdf/<nombre>')
+def ver_pdf(nombre):
+    return send_from_directory(PDF_FOLDER, nombre)
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)
