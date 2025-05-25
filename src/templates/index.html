@@ -3,34 +3,56 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Generador de Reportes Automáticos</title>
+  <title>HIRENOTES AI | Inicio</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
   <style>
     body {
-      background-color: #f8f9fa;
-      height: 100vh;
+      background-color: #f4f6f8;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .main-container {
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: center;
-      padding: 2rem;
+      align-items: center;
+      padding: 40px 20px;
     }
 
     .contenedor {
+      background: #ffffff;
+      padding: 2.5rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
       max-width: 600px;
       width: 100%;
-      padding: 2rem;
-      background: #ffffff;
-      border-radius: 1rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .titulo-principal {
       text-align: center;
+      font-weight: 800;
+      font-size: 2.2rem;
+      color: #2c3e50;
+      margin-bottom: 0.3rem;
+    }
+
+    .subtitulo {
+      text-align: center;
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      color: #7f8c8d;
+    }
+
+    .form-switch-label {
+      font-weight: 600;
     }
 
     .progress {
       height: 25px;
-      width: 50%;
-      margin: 0 auto;
     }
 
     .progress-bar {
@@ -38,64 +60,93 @@
     }
 
     .boton-reportes {
-      max-width: 600px;
-      width: 100%;
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 1rem;
+      text-align: center;
+      margin-top: 1.5rem;
+    }
+
+    .btn-purple {
+      background-color: #9b59b6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn-purple:hover {
+      background-color: #7d3c98;
+    }
+
+    .form-label {
+      font-weight: 600;
+    }
+
+    .footer-note {
+      margin-top: 30px;
+      font-size: 0.9rem;
+      color: #aaa;
+      text-align: center;
     }
   </style>
 </head>
 
 <body>
 
-  <h1 class="mb-3">HIRENOTES AI</h1>
-  <h2 class="mb-3">Generador de Reportes Automáticos</h2>
+  <div class="main-container">
+    <div class="contenedor">
 
-  <div class="contenedor">
-    <form id="formulario" action="/procesar" method="post" enctype="multipart/form-data">
+      <div class="text-center mb-4">
+        <h1 class="titulo-principal">HIRENOTES AI</h1>
+        <h2 class="subtitulo">Generador de Reportes Automáticos</h2>
+      </div>
 
-      <!-- Switch para cambiar entre modos -->
-      <div class="mb-4 d-flex justify-content-center align-items-center gap-3">
-        <span class="fw-semibold">Subir archivo</span>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" role="switch" id="toggleModo">
+      <form id="formulario" action="/procesar" method="post" enctype="multipart/form-data">
+
+        <!-- Switch para cambiar entre modos -->
+        <div class="mb-4 d-flex justify-content-center align-items-center gap-3">
+          <span class="form-switch-label">Subir archivo</span>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="toggleModo">
+          </div>
+          <span class="form-switch-label">Usar Google Sheets</span>
         </div>
-        <span class="fw-semibold">Usar Google Sheets</span>
+
+        <!-- Campo para archivo Excel -->
+        <div class="mb-3 text-start" id="campo-excel">
+          <label for="archivo" class="form-label">Seleccionar archivo Excel (.xlsx):</label>
+          <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx">
+        </div>
+
+        <!-- Campo para link de Google Sheets -->
+        <div class="mb-3 text-start d-none" id="campo-sheets">
+          <label for="sheet_url" class="form-label">Enlace de Google Sheets:</label>
+          <input class="form-control" type="url" id="sheet_url" name="sheet_url"
+            placeholder="https://docs.google.com/spreadsheets/d/..." pattern="https://.*">
+          <small class="form-text text-muted">Debe estar compartido públicamente o con enlace de visualización.</small>
+        </div>
+
+        <button type="submit" class="btn btn-purple w-100">Generar Reportes</button>
+      </form>
+
+      <!-- Progreso -->
+      <div id="progreso-container" class="mt-4 d-none">
+        <h5 class="mb-3 text-center">Progreso de generación</h5>
+        <div class="progress">
+          <div id="barra-progreso" class="progress-bar bg-success" role="progressbar" style="width: 0%">0%</div>
+        </div>
       </div>
 
-      <!-- Campo para archivo Excel -->
-      <div class="mb-3 text-start" id="campo-excel">
-        <label for="archivo" class="form-label">Seleccionar archivo Excel (.xlsx):</label>
-        <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx">
+      <!-- Botón para ir a PDFs -->
+      <div class="boton-reportes">
+        <a href="/pdfs" class="btn btn-outline-secondary">Ver reportes generados</a>
       </div>
 
-      <!-- Campo para link de Google Sheets -->
-      <div class="mb-3 text-start d-none" id="campo-sheets">
-        <label for="sheet_url" class="form-label">Enlace de Google Sheets:</label>
-        <input class="form-control" type="url" id="sheet_url" name="sheet_url"
-          placeholder="https://docs.google.com/spreadsheets/d/..." pattern="https://.*">
-        <small class="form-text text-muted">Debe estar compartido públicamente o con enlace de visualización.</small>
-      </div>
-
-      <button type="submit" class="btn btn-primary w-100">Generar Reportes</button>
-    </form>
-
-    <div id="progreso-container" class="mt-4" style="display:none;">
-      <h5 class="mb-3">Progreso de generación:</h5>
-      <div class="progress">
-        <div id="barra-progreso" class="progress-bar bg-success" role="progressbar" style="width: 0%">0%</div>
-      </div>
     </div>
-  </div>
 
-  <div class="boton-reportes">
-    <a href="/pdfs" class="btn btn-outline-primary">Ver reportes generados</a>
+    <div class="footer-note">© 2025 HIRENOTES AI - Todos los derechos reservados</div>
   </div>
 
   <script>
     $(document).ready(function () {
-      // Alternar campos con el switch
       $('#toggleModo').on('change', function () {
         if ($(this).is(':checked')) {
           $('#campo-excel').addClass('d-none');
@@ -110,34 +161,23 @@
         }
       });
 
-      // Progreso (como antes)
       $('#formulario').on('submit', function () {
-        $('#progreso-container').show();
+        $('#progreso-container').removeClass('d-none');
         $('#barra-progreso').css('width', '0%').text('0%');
         actualizarProgreso();
       });
 
-      $(document).ready(function () {
-        $('#formulario').on('submit', function () {
-          $('#progreso-container').show();
-          $('#barra-progreso').css('width', '0%').text('0%');
-          actualizarProgreso();
+      function actualizarProgreso() {
+        $.getJSON('/progreso', function (data) {
+          let porcentaje = data.porcentaje;
+          $('#barra-progreso').css('width', porcentaje + '%').text(porcentaje + '%');
+          if (porcentaje < 100) {
+            setTimeout(actualizarProgreso, 800);
+          }
         });
-
-        function actualizarProgreso() {
-          $.getJSON('/progreso', function (data) {
-            let porcentaje = data.porcentaje;
-            $('#barra-progreso').css('width', porcentaje + '%').text(porcentaje + '%');
-
-            if (porcentaje < 100) {
-              setTimeout(actualizarProgreso, 800); // puede bajar a 500ms si quieres más frecuencia
-            }
-          });
-        }
-      });
+      }
     });
   </script>
-
 
 </body>
 
