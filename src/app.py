@@ -9,7 +9,7 @@ import json
 import uuid
 import requests
 import numpy as np
-
+from concurrent.futures import ProcessPoolExecutor
 from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash, abort
 from fpdf import FPDF
 from io import BytesIO
@@ -555,7 +555,6 @@ def procesar():
     elif sheet_url:
         if "docs.google.com/spreadsheets" in sheet_url:
             try:
-                # Descargar con nombre único
                 ruta_excel = descargar_sheet_como_excel(sheet_url)
                 if ruta_excel is None or not os.path.exists(ruta_excel):
                     return "No se pudo descargar el archivo desde Google Sheets.", 400
@@ -573,10 +572,13 @@ def procesar():
 
     print(f"Total filas a procesar: {len(df)}")
 
-    # Procesamiento paralelo
     fallidos = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_index = {executor.submit(generar_informe_y_pdf, idx, fila): idx for idx, fila in df.iterrows()}
+
+    # Procesamiento con ProcessPoolExecutor para evitar errores en matplotlib/fpdf
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        future_to_index = {
+            executor.submit(generar_informe_y_pdf, idx, fila): idx for idx, fila in df.iterrows()
+        }
         for future in concurrent.futures.as_completed(future_to_index):
             idx = future_to_index[future]
             try:
@@ -586,10 +588,10 @@ def procesar():
                 print(f"[Error] Índice {idx} al procesar en paralelo: {e}")
                 fallidos.append((idx, df.iloc[idx]))
 
-    # Reintentos
+    # Reintentos con procesos también
     if fallidos:
-        print(f"🔁 Reintentando {len(fallidos)} candidatos fallidos...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as retry_executor:
+        print(f"Reintentando {len(fallidos)} candidatos fallidos...")
+        with ProcessPoolExecutor(max_workers=8) as retry_executor:
             retry_futures = [
                 retry_executor.submit(generar_informe_y_pdf, idx, fila) for idx, fila in fallidos
             ]
