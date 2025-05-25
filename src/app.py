@@ -10,7 +10,7 @@ import uuid
 import requests
 import numpy as np
 
-from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash
+from flask import Flask, request, render_template, send_from_directory, redirect, url_for, flash, abort
 from fpdf import FPDF
 from io import BytesIO
 from werkzeug.utils import secure_filename
@@ -526,7 +526,7 @@ def generar_pdf_comparativo(nombre_archivo, seleccionados):
                     pdf.multi_cell(0, 8, parrafo.strip())
                     pdf.ln(1)
 
-    ruta_salida = os.path.join( 'pdfs', nombre_archivo)
+    ruta_salida = os.path.join('pdfs', nombre_archivo)
     pdf.output(ruta_salida)
     return ruta_salida
 
@@ -609,7 +609,7 @@ def eliminar_multiples():
     no_encontrados = []
 
     for archivo in seleccionados:
-        ruta = os.path.join(PDF_FOLDER, archivo)
+        ruta = os.path.join(app.config['PDF_FOLDER'], archivo)
         if os.path.exists(ruta):
             os.remove(ruta)
             eliminados.append(archivo)
@@ -621,7 +621,11 @@ def eliminar_multiples():
     if no_encontrados:
         flash(f"No se encontraron los archivos: {', '.join(no_encontrados)}")
 
-    return redirect(url_for('listar_pdfs'))
+    # Puedes redirigir según el tipo de archivo eliminado (ejemplo básico):
+    if any(es_reporte_comparativo(a) for a in eliminados):
+        return redirect(url_for('listar_pdfs_comparativos'))
+    else:
+        return redirect(url_for('listar_pdfs'))
 
 @app.route('/comparar', methods=['POST'])
 def comparar_candidatos():
@@ -649,24 +653,77 @@ def comparar_candidatos():
     ruta_pdf = generar_pdf_comparativo(nombre_comparativo, seleccionados)
     
     # Aquí podrías registrar el PDF comparativo como los demás
-    return redirect(url_for('listar_pdfs'))
+    return redirect(url_for('listar_pdfs_comparativos'))
 
-@app.route('/ver_pdf/<nombre>')
-def ver_pdf(nombre):
-    ruta_completa = os.path.join(app.config['PDF_FOLDER'], nombre)
-    print(f"INTENTANDO VER: {ruta_completa}")
-    print("¿Existe?", os.path.exists(ruta_completa))
-    return send_from_directory(app.config['PDF_FOLDER'], nombre)
+def es_reporte_comparativo(nombre_archivo):
+    return nombre_archivo.startswith("Reporte_Comparativo_")
 
 @app.route('/pdfs')
 def listar_pdfs():
     archivos = os.listdir(PDF_FOLDER)
-    archivos = [f for f in archivos if f.endswith(".pdf")]
+    # Lista solo reportes individuales (no comparativos)
+    archivos = [f for f in archivos if f.endswith(".pdf") and not es_reporte_comparativo(f)]
     archivos.sort(key=extraer_numero)
     return render_template('pdfs.html', archivos=archivos)
 
+@app.route('/pdfs/comparativos')
+def listar_pdfs_comparativos():
+    archivos = os.listdir(PDF_FOLDER)
+    # Lista solo reportes comparativos
+    archivos = [f for f in archivos if f.endswith(".pdf") and es_reporte_comparativo(f)]
+    archivos.sort(key=extraer_numero)
+    return render_template('pdfs_comparativos.html', archivos=archivos)
+
+@app.route('/ver_pdf/<nombre>')
+def ver_pdf(nombre):
+    if not os.path.exists(os.path.join(app.config['PDF_FOLDER'], nombre)):
+        abort(404)
+    return send_from_directory(app.config['PDF_FOLDER'], nombre)
+
+
+@app.route('/editar_pdf/<nombre>', methods=['GET', 'POST'])
+def editar_pdf(nombre):
+    carpeta = app.config['PDF_FOLDER']
+    ruta_actual = os.path.join(carpeta, nombre)
+
+    if request.method == 'POST':
+        nuevo_nombre = request.form['nuevo_nombre']
+        origen = request.form.get('origen', 'pdfs')
+
+        nueva_ruta = os.path.join(carpeta, nuevo_nombre)
+
+        if os.path.exists(ruta_actual) and not os.path.exists(nueva_ruta):
+            os.rename(ruta_actual, nueva_ruta)
+
+            pdf_to_nombre_real = cargar_mapa_pdfs()
+            if nombre in pdf_to_nombre_real:
+                pdf_to_nombre_real[nuevo_nombre] = pdf_to_nombre_real.pop(nombre)
+                guardar_mapa_pdfs(pdf_to_nombre_real)
+                print(f"Actualizado en JSON: {nombre} -> {nuevo_nombre}")
+            else:
+                print(f"Nombre '{nombre}' no encontrado en el JSON.")
+
+            flash('Nombre actualizado exitosamente.', 'success')
+        else:
+            flash('Error al renombrar. Verifica si el nombre ya existe.', 'danger')
+
+        if origen == 'pdfs_comparativos':
+            return redirect(url_for('listar_pdfs_comparativos'))
+        else:
+            return redirect(url_for('listar_pdfs'))
+
+    else:
+        # GET: Mostrar formulario para editar el nombre
+        origen = request.args.get('origen', 'pdfs')
+        return render_template('editar_nombre.html', nombre_actual=nombre, origen=origen)
+
+
+
+
 @app.route('/descargar_pdf/<nombre>')
 def descargar_pdf(nombre):
+    if not os.path.exists(os.path.join(app.config['PDF_FOLDER'], nombre)):
+        abort(404)
     return send_from_directory(app.config['PDF_FOLDER'], nombre, as_attachment=True)
 
 
